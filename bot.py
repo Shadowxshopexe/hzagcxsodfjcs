@@ -18,7 +18,7 @@ def save(path, data):
 # ---------------- CONFIG ----------------
 config = load("config.json")
 
-# Railway ENV override (ถ้าไม่มี ENV จะใช้ค่าใน config.json)
+# Railway ENV override
 config["token"] = os.getenv("TOKEN", config.get("token"))
 config["guild_id"] = os.getenv("GUILD_ID", config.get("guild_id"))
 config["payment_channel"] = os.getenv("PAYMENT_CHANNEL", config.get("payment_channel"))
@@ -35,7 +35,6 @@ if not os.path.exists("logo.png"):
     except:
         pass
 
-# ---------------- RECEIPT ----------------
 def receipt():
     return "LS-" + "".join(random.choices("ABCDEFGHJKMNPQRSTUVWXYZ23456789", k=6))
 
@@ -71,7 +70,7 @@ async def pm(uid, msg):
 # ---------------- READY ----------------
 @bot.event
 async def on_ready():
-    print("✅ LuckyShop Bot Ready on Railway")
+    print("✅ LuckyShop Bot Ready (Fixed Interaction)")
     check_expire.start()
 
 # ---------------- BUY COMMAND ----------------
@@ -83,16 +82,18 @@ async def buy(ctx):
         color=0xFFD700
     )
     e.set_thumbnail(url="attachment://logo.png")
-    await ctx.send(embed=e, file=discord.File("logo.png"), view=BuyMenu())
+    await ctx.send(embed=e,
+                   file=discord.File("logo.png"),
+                   view=BuyMenu())
 
-# ---------------- INTERACTION HANDLER ----------------
+# ---------------- INTERACTION ----------------
 @bot.event
 async def on_interaction(i):
     try:
         cid = i.data.get("custom_id", "")
         uid = str(i.user.id)
 
-        # --- BUY PACKAGE ---
+        # -------- BUY ----------
         if cid.startswith("buy_"):
             d = int(cid.split("_")[1])
             data[uid] = {"days": d, "status": "method"}
@@ -101,45 +102,47 @@ async def on_interaction(i):
             e = discord.Embed(title="💰 เลือกช่องทางชำระเงิน", color=0xFFD700)
             return await i.response.send_message(embed=e, view=PayMethod(uid), ephemeral=True)
 
-        # --- BANK ---
+        # -------- BANK ----------
         if cid.startswith("bank_"):
             uid = cid[5:]
             data[uid]["method"] = "bank"
             data[uid]["status"] = "slip"
             save("data.json", data)
 
-            return await i.response.send_message("🏦 ส่งสลิปธนาคารในห้องนี้ได้เลย", ephemeral=True)
+            return await i.response.send_message("🏦 ส่งสลิปธนาคารได้เลย", ephemeral=True)
 
-        # --- TRUE MONEY MENU ---
+        # -------- TM MENU ----------
         if cid.startswith("tm_"):
             uid = cid[3:]
             data[uid]["status"] = "choose_tm"
             save("data.json", data)
 
-            e = discord.Embed(title="📱 TrueMoney", description="เลือกวิธีชำระเงิน", color=0xFF8800)
+            e = discord.Embed(title="📱 TrueMoney",
+                              description="เลือกวิธีชำระเงิน",
+                              color=0xFF8800)
             return await i.response.send_message(embed=e, view=TM(uid), ephemeral=True)
 
-        # --- GIFT ---
+        # -------- GIFT ----------
         if cid.startswith("gift_"):
             uid = cid[5:]
             data[uid]["method"] = "gift"
             data[uid]["status"] = "gift"
             save("data.json", data)
 
-            return await i.response.send_message("🎁 ส่งลิงก์ซองทรูมันนี่ในห้องนี้", ephemeral=True)
+            return await i.response.send_message("🎁 ส่งลิงก์ซองทรูในห้องนี้", ephemeral=True)
 
-        # --- TRUE SLIP ---
+        # -------- SLIP ----------
         if cid.startswith("slip_"):
             uid = cid[5:]
             data[uid]["method"] = "trueslip"
             data[uid]["status"] = "slip"
             save("data.json", data)
 
-            return await i.response.send_message("📸 ส่งสลิปทรูมันนี่ในห้องนี้", ephemeral=True)
+            return await i.response.send_message("📸 ส่งสลิปทรูในห้องนี้", ephemeral=True)
 
-        # ---------------- APPROVE (อนุมัติ) ----------------
+        # -------- ✅ APPROVE ----------
         if cid.startswith("ok_"):
-            t = cid[3:]
+            t = cid[3:]                 # user ID
             info = data[t]
             d = info["days"]
 
@@ -149,7 +152,7 @@ async def on_interaction(i):
 
             now = datetime.datetime.utcnow().timestamp()
 
-            # ✅ ต่ออายุถ้าเหลือเวลา
+            # ✅ ทบวันถ้ายังไม่หมดอายุ
             if info.get("expire", 0) > now:
                 exp = info["expire"] + d * 86400
             else:
@@ -159,11 +162,11 @@ async def on_interaction(i):
             info["status"] = "approved"
             save("data.json", data)
 
-            # ✅ ให้ยศ
+            # ✅ Add role
             if m and r:
                 await m.add_roles(r)
 
-            # ✅ ใบเสร็จ
+            # ✅ บันทึกใบเสร็จ
             rc = receipt()
             logs[rc] = {
                 "uid": t,
@@ -173,20 +176,22 @@ async def on_interaction(i):
             }
             save("logs.json", logs)
 
-            # ✅ ส่ง DM ลูกค้า
-            tm = datetime.datetime.utcfromtimestamp(exp).strftime("%d/%m/%Y %H:%M")
-            await pm(t, f"✅ อนุมัติแล้ว!\nยศ {d} วัน\nหมดอายุ: {tm}\nใบเสร็จ: {rc}")
+            # ✅ DM ลูกค้า
+            exp_dt = datetime.datetime.utcfromtimestamp(exp).strftime("%d/%m/%Y %H:%M")
+            await pm(t, f"✅ อนุมัติแล้ว!\nยศ {d} วัน\nหมดอายุ: {exp_dt}\nใบเสร็จ: {rc}")
 
-            # ✅ ลบข้อความแอดมิน
+            # ✅ ต้องตอบ interaction ก่อนลบข้อความ
+            await i.response.send_message(f"✅ อนุมัติ <@{t}> แล้ว", ephemeral=True)
+
+            # ✅ ค่อยลบข้อความแอดมิน
             try:
                 await i.message.delete()
             except:
                 pass
 
-            return await i.response.send_message(
-                f"✅ อนุมัติ <@{t}> สำเร็จ", ephemeral=True)
+            return
 
-        # ---------------- DENY (ไม่อนุมัติ) ----------------
+        # -------- ❌ DENY ----------
         if cid.startswith("no_"):
             t = cid[3:]
 
@@ -196,14 +201,16 @@ async def on_interaction(i):
                 del data[t]
                 save("data.json", data)
 
+            # ✅ ตอบ interaction ก่อน
+            await i.response.send_message(f"❌ ปฏิเสธ <@{t}> แล้ว", ephemeral=True)
+
             # ✅ ลบข้อความแอดมิน
             try:
                 await i.message.delete()
             except:
                 pass
 
-            return await i.response.send_message(
-                f"❌ ปฏิเสธ <@{t}> แล้ว", ephemeral=True)
+            return
 
     except Exception as e:
         print("INTERACTION ERR:", e)
@@ -217,7 +224,6 @@ async def on_message(msg):
 
     uid = str(msg.author.id)
 
-    # นอกห้องชำระเงิน = อนุญาตคำสั่ง
     if msg.channel.id != int(config["payment_channel"]):
         return await bot.process_commands(msg)
 
@@ -227,27 +233,27 @@ async def on_message(msg):
     st = data[uid]["status"]
 
     try:
-        # ---------------- GIFT ----------------
+        # -------- GIFT --------
         if st == "gift" and "gift.truemoney.com" in msg.content:
             adm = bot.get_channel(int(config["admin_channel"]))
 
-            view = View()
-            view.add_item(Button(label="อนุมัติ", style=discord.ButtonStyle.green, custom_id=f"ok_{uid}"))
-            view.add_item(Button(label="ไม่อนุมัติ", style=discord.ButtonStyle.red, custom_id=f"no_{uid}"))
+            v = View()
+            v.add_item(Button(label="อนุมัติ", style=discord.ButtonStyle.green, custom_id=f"ok_{uid}"))
+            v.add_item(Button(label="ไม่อนุมัติ", style=discord.ButtonStyle.red, custom_id=f"no_{uid}"))
 
-            await adm.send(f"🎁 ซองทรูจาก <@{uid}>:\n{msg.content}", view=view)
+            await adm.send(f"🎁 ซองทรูจาก <@{uid}>:\n{msg.content}", view=v)
             return await msg.delete()
 
-        # ---------------- SLIP ----------------
+        # -------- SLIP --------
         if st == "slip" and msg.attachments:
             adm = bot.get_channel(int(config["admin_channel"]))
             files = [await a.to_file() for a in msg.attachments]
 
-            view = View()
-            view.add_item(Button(label="อนุมัติ", style=discord.ButtonStyle.green, custom_id=f"ok_{uid}"))
-            view.add_item(Button(label="ไม่อนุมัติ", style=discord.ButtonStyle.red, custom_id=f"no_{uid}"))
+            v = View()
+            v.add_item(Button(label="อนุมัติ", style=discord.ButtonStyle.green, custom_id=f"ok_{uid}"))
+            v.add_item(Button(label="ไม่อนุมัติ", style=discord.ButtonStyle.red, custom_id=f"no_{uid}"))
 
-            await adm.send(f"💰 สลิปจาก <@{uid}>", files=files, view=view)
+            await adm.send(f"💰 สลิปจาก <@{uid}>", files=files, view=v)
             return await msg.delete()
 
     except Exception as e:
@@ -255,7 +261,7 @@ async def on_message(msg):
 
     await bot.process_commands(msg)
 
-# ---------------- AUTO ROLE REMOVE ----------------
+# ---------------- AUTO REMOVE ROLE ----------------
 @tasks.loop(minutes=1)
 async def check_expire():
     now = datetime.datetime.utcnow().timestamp()
