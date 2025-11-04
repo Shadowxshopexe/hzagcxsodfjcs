@@ -62,15 +62,15 @@ class TM(View):
 
 async def pm(uid, msg):
     try:
-        u = await bot.fetch_user(int(uid))
-        await u.send(msg)
+        user = await bot.fetch_user(int(uid))
+        await user.send(msg)
     except:
         pass
 
 # ---------------- READY ----------------
 @bot.event
 async def on_ready():
-    print("✅ LuckyShop Bot Ready (Fixed Interaction)")
+    print("✅ LuckyShop Bot Ready (FULL Version)")
     check_expire.start()
 
 # ---------------- BUY COMMAND ----------------
@@ -78,7 +78,7 @@ async def on_ready():
 async def buy(ctx):
     e = discord.Embed(
         title="💛 Lucky Shop – ซื้อยศ",
-        description="เลือกแพ็กเกจที่ต้องการด้านล่าง",
+        description="เลือกแพ็กเกจด้านล่าง",
         color=0xFFD700
     )
     e.set_thumbnail(url="attachment://logo.png")
@@ -86,7 +86,7 @@ async def buy(ctx):
                    file=discord.File("logo.png"),
                    view=BuyMenu())
 
-# ---------------- INTERACTION ----------------
+# ---------------- INTERACTION HANDLER ----------------
 @bot.event
 async def on_interaction(i):
     try:
@@ -109,7 +109,7 @@ async def on_interaction(i):
             data[uid]["status"] = "slip"
             save("data.json", data)
 
-            return await i.response.send_message("🏦 ส่งสลิปธนาคารได้เลย", ephemeral=True)
+            return await i.response.send_message("🏦 ส่งสลิปธนาคารในห้องนี้ได้เลย", ephemeral=True)
 
         # -------- TM MENU ----------
         if cid.startswith("tm_"):
@@ -129,7 +129,7 @@ async def on_interaction(i):
             data[uid]["status"] = "gift"
             save("data.json", data)
 
-            return await i.response.send_message("🎁 ส่งลิงก์ซองทรูในห้องนี้", ephemeral=True)
+            return await i.response.send_message("🎁 ส่งลิงก์ซองทรูมันนี่ได้เลย", ephemeral=True)
 
         # -------- SLIP ----------
         if cid.startswith("slip_"):
@@ -138,52 +138,53 @@ async def on_interaction(i):
             data[uid]["status"] = "slip"
             save("data.json", data)
 
-            return await i.response.send_message("📸 ส่งสลิปทรูในห้องนี้", ephemeral=True)
+            return await i.response.send_message("📸 ส่งสลิปทรูมันนี่ในห้องนี้", ephemeral=True)
 
         # -------- ✅ APPROVE ----------
         if cid.startswith("ok_"):
-            t = cid[3:]                 # user ID
+            t = cid[3:]
             info = data[t]
             d = info["days"]
 
             g = bot.get_guild(int(config["guild_id"]))
-            m = g.get_member(int(t))
-            r = g.get_role(int(config["roles"][str(d)]))
+            member = g.get_member(int(t))
+            role = g.get_role(int(config["roles"][str(d)]))
 
             now = datetime.datetime.utcnow().timestamp()
 
-            # ✅ ทบวันถ้ายังไม่หมดอายุ
+            # ✅ ถ้ามีเวลาเหลือ → ทบเพิ่ม
             if info.get("expire", 0) > now:
-                exp = info["expire"] + d * 86400
+                expire_time = info["expire"] + d * 86400
             else:
-                exp = now + d * 86400
+                expire_time = now + d * 86400
 
-            info["expire"] = exp
+            # ✅ บันทึกเวลาใหม่
+            info["expire"] = expire_time
             info["status"] = "approved"
             save("data.json", data)
 
-            # ✅ Add role
-            if m and r:
-                await m.add_roles(r)
+            # ✅ เพิ่มยศ
+            if member and role:
+                await member.add_roles(role)
 
-            # ✅ บันทึกใบเสร็จ
+            # ✅ ใบเสร็จ
             rc = receipt()
             logs[rc] = {
                 "uid": t,
                 "days": d,
                 "method": info["method"],
-                "expire": exp
+                "expire": expire_time
             }
             save("logs.json", logs)
 
             # ✅ DM ลูกค้า
-            exp_dt = datetime.datetime.utcfromtimestamp(exp).strftime("%d/%m/%Y %H:%M")
-            await pm(t, f"✅ อนุมัติแล้ว!\nยศ {d} วัน\nหมดอายุ: {exp_dt}\nใบเสร็จ: {rc}")
+            exp_text = datetime.datetime.utcfromtimestamp(expire_time).strftime("%d/%m/%Y %H:%M")
+            await pm(t, f"✅ อนุมัติแล้ว!\nยศ {d} วัน\nหมดอายุ: {exp_text}\nใบเสร็จ: {rc}")
 
-            # ✅ ต้องตอบ interaction ก่อนลบข้อความ
-            await i.response.send_message(f"✅ อนุมัติ <@{t}> แล้ว", ephemeral=True)
+            # ✅ ตอบ interaction ก่อนเพื่อกัน ERROR
+            await i.response.send_message(f"✅ อนุมัติ <@{t}> สำเร็จ", ephemeral=True)
 
-            # ✅ ค่อยลบข้อความแอดมิน
+            # ✅ ลบข้อความในห้องแอดมิน
             try:
                 await i.message.delete()
             except:
@@ -201,10 +202,8 @@ async def on_interaction(i):
                 del data[t]
                 save("data.json", data)
 
-            # ✅ ตอบ interaction ก่อน
             await i.response.send_message(f"❌ ปฏิเสธ <@{t}> แล้ว", ephemeral=True)
 
-            # ✅ ลบข้อความแอดมิน
             try:
                 await i.message.delete()
             except:
@@ -265,27 +264,27 @@ async def on_message(msg):
 @tasks.loop(minutes=1)
 async def check_expire():
     now = datetime.datetime.utcnow().timestamp()
-    g = bot.get_guild(int(config["guild_id"]))
-    rem = []
+    guild = bot.get_guild(int(config["guild_id"]))
+    remove_list = []
 
     for uid, info in list(data.items()):
         if info.get("status") != "approved":
             continue
 
         if now >= info.get("expire", 0):
-            m = g.get_member(int(uid))
-            r = g.get_role(int(config["roles"][str(info["days"])]))
+            member = guild.get_member(int(uid))
+            role = guild.get_role(int(config["roles"][str(info["days"])]))
 
-            if m and r:
-                await m.remove_roles(r)
+            if member and role:
+                await member.remove_roles(role)
 
-            await pm(uid, "⏳ ยศของคุณหมดอายุแล้ว")
-            rem.append(uid)
+            await pm(uid, "⏳ ยศหมดอายุแล้ว")
+            remove_list.append(uid)
 
-    for u in rem:
+    for u in remove_list:
         del data[u]
 
-    if rem:
+    if remove_list:
         save("data.json", data)
 
 # ---------------- RUN ----------------
