@@ -70,7 +70,7 @@ async def pm(uid, msg):
 # ---------------- READY ----------------
 @bot.event
 async def on_ready():
-    print("✅ LuckyShop Bot Ready (FULL Version)")
+    print("✅ LuckyShop Bot Ready (DEFER FIX VERSION)")
     check_expire.start()
 
 # ---------------- BUY COMMAND ----------------
@@ -93,7 +93,7 @@ async def on_interaction(i):
         cid = i.data.get("custom_id", "")
         uid = str(i.user.id)
 
-        # -------- BUY ----------
+        # -------- BUY PACKAGE ----------
         if cid.startswith("buy_"):
             d = int(cid.split("_")[1])
             data[uid] = {"days": d, "status": "method"}
@@ -111,7 +111,7 @@ async def on_interaction(i):
 
             return await i.response.send_message("🏦 ส่งสลิปธนาคารในห้องนี้ได้เลย", ephemeral=True)
 
-        # -------- TM MENU ----------
+        # -------- TRUE MONEY MENU ----------
         if cid.startswith("tm_"):
             uid = cid[3:]
             data[uid]["status"] = "choose_tm"
@@ -140,7 +140,7 @@ async def on_interaction(i):
 
             return await i.response.send_message("📸 ส่งสลิปทรูมันนี่ในห้องนี้", ephemeral=True)
 
-        # -------- ✅ APPROVE ----------
+        # ✅✅✅ -------- APPROVE (แก้ interaction failed แล้ว) ----------
         if cid.startswith("ok_"):
             t = cid[3:]
             info = data[t]
@@ -150,20 +150,22 @@ async def on_interaction(i):
             member = g.get_member(int(t))
             role = g.get_role(int(config["roles"][str(d)]))
 
-            now = datetime.datetime.utcnow().timestamp()
+            # ✅ 1) DEFER interaction (กัน interaction failed)
+            await i.response.defer(ephemeral=True)
 
-            # ✅ ถ้ามีเวลาเหลือ → ทบเพิ่ม
+            now = datetime.datetime.now(datetime.timezone.utc).timestamp()
+
+            # ✅ ถ้ายังมีเวลาเหลือ → ต่ออายุ
             if info.get("expire", 0) > now:
                 expire_time = info["expire"] + d * 86400
             else:
                 expire_time = now + d * 86400
 
-            # ✅ บันทึกเวลาใหม่
             info["expire"] = expire_time
             info["status"] = "approved"
             save("data.json", data)
 
-            # ✅ เพิ่มยศ
+            # ✅ ให้ ROLE
             if member and role:
                 await member.add_roles(role)
 
@@ -178,37 +180,38 @@ async def on_interaction(i):
             save("logs.json", logs)
 
             # ✅ DM ลูกค้า
-            exp_text = datetime.datetime.utcfromtimestamp(expire_time).strftime("%d/%m/%Y %H:%M")
-            await pm(t, f"✅ อนุมัติแล้ว!\nยศ {d} วัน\nหมดอายุ: {exp_text}\nใบเสร็จ: {rc}")
+            expires = datetime.datetime.utcfromtimestamp(expire_time).strftime("%d/%m/%Y %H:%M")
+            await pm(t, f"✅ อนุมัติแล้ว!\nยศ {d} วัน\nหมดอายุ: {expires}\nใบเสร็จ: {rc}")
 
-            # ✅ ตอบ interaction ก่อนเพื่อกัน ERROR
-            await i.response.send_message(f"✅ อนุมัติ <@{t}> สำเร็จ", ephemeral=True)
-
-            # ✅ ลบข้อความในห้องแอดมิน
+            # ✅ 2) ลบข้อความแอดมิน
             try:
                 await i.message.delete()
             except:
                 pass
 
+            # ✅ 3) ตอบกลับ followup (ปลอดภัยที่สุด)
+            await i.followup.send(f"✅ อนุมัติ <@{t}> แล้ว!", ephemeral=True)
             return
 
-        # -------- ❌ DENY ----------
+        # ✅✅✅ -------- DENY ----------
         if cid.startswith("no_"):
             t = cid[3:]
 
-            await pm(t, "❌ การชำระเงินของคุณไม่ผ่านตรวจสอบ")
+            # DEFER ก่อน
+            await i.response.defer(ephemeral=True)
+
+            await pm(t, "❌ การชำระของคุณไม่ผ่านตรวจสอบ")
 
             if t in data:
                 del data[t]
                 save("data.json", data)
 
-            await i.response.send_message(f"❌ ปฏิเสธ <@{t}> แล้ว", ephemeral=True)
-
             try:
                 await i.message.delete()
             except:
                 pass
 
+            await i.followup.send(f"❌ ปฏิเสธ <@{t}> แล้ว", ephemeral=True)
             return
 
     except Exception as e:
@@ -263,7 +266,7 @@ async def on_message(msg):
 # ---------------- AUTO REMOVE ROLE ----------------
 @tasks.loop(minutes=1)
 async def check_expire():
-    now = datetime.datetime.utcnow().timestamp()
+    now = datetime.datetime.now(datetime.timezone.utc).timestamp()
     guild = bot.get_guild(int(config["guild_id"]))
     remove_list = []
 
@@ -278,7 +281,7 @@ async def check_expire():
             if member and role:
                 await member.remove_roles(role)
 
-            await pm(uid, "⏳ ยศหมดอายุแล้ว")
+            await pm(uid, "⏳ ยศของคุณหมดอายุแล้ว")
             remove_list.append(uid)
 
     for u in remove_list:
